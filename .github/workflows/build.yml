@@ -1,4 +1,4 @@
-name: Zalith Launcher APK Builder
+name: Zalith Launcher - APK Builder
 
 on:
   push:
@@ -11,20 +11,20 @@ permissions:
   contents: read
 
 concurrency:
-  group: zalith-build
+  group: zalith-apk-build
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Build Zalith APK
+    name: Compile Android APK
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -38,26 +38,31 @@ jobs:
           sdkmanager "build-tools;35.0.0"
           yes | sdkmanager --licenses
 
-      - name: Setup Gradle 8.7
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.7'
+      - name: Make Gradle Executable
+        run: chmod +x ./gradlew
+
+      - name: Verify Gradle
+        run: ./gradlew --version
+
+      - name: Clean Project
+        run: ./gradlew clean
 
       - name: Build Debug APK
-        run: |
-          gradle :app:assembleDebug --stacktrace
+        run: ./gradlew :app:assembleDebug --stacktrace
 
-      - name: Upload Zalith APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Zalith-Launcher-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
 
-      - name: Build Summary
+      - name: Build Report
         if: success()
         run: |
           echo "## Zalith Launcher Build Successful!" >> $GITHUB_STEP_SUMMARY
-          echo "APK generated successfully." >> $GITHUB_STEP_SUMMARY
+          echo "APK compiled successfully." >> $GITHUB_STEP_SUMMARY
           echo "Package: com.zalith.launcher" >> $GITHUB_STEP_SUMMARY
+          echo "Gradle: 8.7" >> $GITHUB_STEP_SUMMARY
+          echo "Java: 17" >> $GITHUB_STEP_SUMMARY
