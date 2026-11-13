@@ -1,27 +1,22 @@
 # Zalith Launcher
 
-A polished Jetpack Compose Android launcher concept inspired by a premium launcher dashboard and a DeepWiki-style information surface.
+A Java Edition-inspired Android launcher UI concept built with Kotlin, Jetpack Compose and Material 3. The visual direction uses block-world colors, instance cards, Java runtime status, and a DeepWiki-style notes panel.
 
-## Features
-- Kotlin + Jetpack Compose interface
-- Material 3 dark glassmorphism-inspired UI
-- Favorites launcher grid with quick actions
-- DeepWiki information card panel
-- Real Android app module structure ready for Gradle
+## What is included
+- Android Gradle application module using Kotlin and Jetpack Compose Material 3.
+- Responsive dark launcher dashboard with a Minecraft Java Edition-inspired visual style.
+- Search and selection for sample instance profiles (Vanilla, Forge, and Fabric examples).
+- Runtime status and launch controls presented as UI affordances.
+- DeepWiki-inspired documentation panel.
 
-## Project structure
-- `app/` — Android application module
-- `settings.gradle.kts` — project settings
-- `build.gradle.kts` — root Gradle plugins
-
-## How to build
-Open the project in Android Studio or use Gradle locally with Android SDK configured.
-
-Example:
+## Build
+Open this repository in Android Studio with Android SDK 35 installed, then run the `app` configuration. From a configured command line, build a debug APK with:
 
 ```bash
-gradle assembleDebug
+./gradlew assembleDebug
 ```
 
-## Notes
-This is a launcher UI starter/prototype focused on the visual design and app layout. It is designed to be extended with real app-launching logic, package manager integration, and custom launcher features later.
+The APK output will be under `app/build/outputs/apk/debug/` after a successful build. This repository does not currently include the Gradle wrapper scripts, so use Android Studio's Gradle integration or generate a wrapper with a locally installed Gradle distribution.
+
+## Important scope note
+This is currently a **launcher UI prototype**, not a functioning Minecraft Java launcher. It does not download Minecraft files, authenticate Microsoft accounts, install/manage Java runtimes, or start the game process. The sample versions/loaders are display data only. Those integrations need to be implemented and tested separately, with appropriate licensing and account-security handling.
