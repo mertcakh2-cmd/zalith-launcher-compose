@@ -24,12 +24,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -44,10 +45,12 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -56,103 +59,129 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.zalith.launcher.data.GameInstance
+import com.zalith.launcher.data.InstanceStore
 import com.zalith.launcher.data.MojangVersionManifest
 import com.zalith.launcher.data.MojangVersionRepository
+import com.zalith.launcher.data.supportedLoaderChoices
 import com.zalith.launcher.ui.theme.ZalithLauncherTheme
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
-private val versionAccent = listOf(
-    Color(0xFF79D58A), Color(0xFFFFBD6E), Color(0xFF79D6CF), Color(0xFF9EAAFF)
-)
+private val accents = listOf(Color(0xFF79D58A), Color(0xFFFFBD6E), Color(0xFF79D6CF), Color(0xFF9EAAFF))
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ZalithLauncherScreen() {
+    val context = LocalContext.current
+    val instances = remember { mutableStateListOf<GameInstance>().apply { addAll(InstanceStore.load(context)) } }
     var selectedTab by remember { mutableStateOf("Home") }
     var query by remember { mutableStateOf("") }
     var manifest by remember { mutableStateOf<MojangVersionManifest?>(null) }
     var selectedVersion by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
     var loadError by remember { mutableStateOf<String?>(null) }
+    var showCreateDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         try {
-            manifest = withContext(Dispatchers.IO) { MojangVersionRepository.fetchManifest() }
+            manifest = MojangVersionRepository.fetchManifest()
             selectedVersion = manifest?.latestRelease
         } catch (error: Exception) {
             loadError = error.message ?: "Could not reach Mojang's version service."
-        } finally {
-            loading = false
-        }
+        } finally { loading = false }
     }
 
-    val releases = manifest?.versions?.filter { it.type == "release" }.orEmpty()
-    val shownVersions = releases
-        .filter { it.id.contains(query, ignoreCase = true) }
-        .take(8)
+    val versions = manifest?.versions?.filter { it.type == "release" }
+        ?.filter { it.id.contains(query, ignoreCase = true) }?.take(8).orEmpty()
 
     Scaffold(
         containerColor = Color.Transparent,
         bottomBar = {
             Surface(color = Color(0xFF101A16), tonalElevation = 8.dp) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    listOf("Home", "Versions", "Settings").forEach { tab ->
-                        FilterChip(
-                            selected = selectedTab == tab,
-                            onClick = { selectedTab = tab },
-                            label = { Text(tab) },
-                            leadingIcon = if (tab == "Settings") {
-                                { Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                            } else null
-                        )
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    listOf("Home", "Instances", "Settings").forEach { tab ->
+                        FilterChip(selected = selectedTab == tab, onClick = { selectedTab = tab }, label = { Text(tab) },
+                            leadingIcon = if (tab == "Settings") ({ Icon(Icons.Default.Settings, null, Modifier.size(16.dp)) }) else null)
                     }
                 }
             }
         }
-    ) { scaffoldPadding ->
-        Box(
-            modifier = Modifier.fillMaxSize().background(
-                Brush.verticalGradient(listOf(Color(0xFF101A16), Color(0xFF17251C), Color(0xFF0D1512)))
-            )
-        ) {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(scaffoldPadding)
-                    .verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 18.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
-            ) {
+    ) { padding ->
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF101A16), Color(0xFF17251C), Color(0xFF0D1512))))) {
+            Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                 Header()
-                SearchField(query = query, onQueryChange = { query = it })
+                SearchField(query) { query = it }
                 HeroCard(version = selectedVersion ?: "Loading…", onBrowse = { selectedTab = "Versions" })
-                OfficialVersionsCard(
-                    loading = loading,
-                    error = loadError,
-                    manifest = manifest,
-                    versions = shownVersions.map { it.id },
-                    selectedVersion = selectedVersion,
-                    onSelectVersion = { selectedVersion = it }
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Your instances", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text("Independent profiles for versions and loaders", color = Color(0xFFB2C4B4), style = MaterialTheme.typography.bodySmall)
+                    }
+                    IconButton(onClick = { showCreateDialog = true }) { Icon(Icons.Default.Add, "Create instance", tint = Color(0xFFB9F6CA)) }
+                }
+                if (instances.isEmpty()) {
+                    EmptyInstancesCard(onCreate = { showCreateDialog = true })
+                } else {
+                    instances.forEachIndexed { index, instance ->
+                        InstanceCard(instance, accents[index % accents.size], onDelete = {
+                            instances.remove(instance)
+                            InstanceStore.save(context, instances)
+                        })
+                    }
+                }
+                OfficialVersionsCard(loading, loadError, manifest, versions.map { it.id }, selectedVersion) { selectedVersion = it }
                 JavaRuntimeCard()
                 DeepWikiCard()
-                Text(
-                    "ZALITH • JAVA EDITION",
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                    color = Color(0xFF718477),
-                    style = MaterialTheme.typography.labelSmall,
-                    letterSpacing = 2.sp
-                )
+                Text("ZALITH • JAVA EDITION", Modifier.fillMaxWidth().padding(bottom = 8.dp), color = Color(0xFF718477), style = MaterialTheme.typography.labelSmall, letterSpacing = 2.sp)
             }
         }
     }
+
+    if (showCreateDialog) {
+        CreateInstanceDialog(
+            defaultVersion = selectedVersion ?: manifest?.latestRelease ?: "1.21.1",
+            onDismiss = { showCreateDialog = false },
+            onCreate = { name, version, loader ->
+                val instance = GameInstance(name.trim(), version, loader)
+                instances.add(instance)
+                InstanceStore.save(context, instances)
+                showCreateDialog = false
+                selectedTab = "Instances"
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CreateInstanceDialog(defaultVersion: String, onDismiss: () -> Unit, onCreate: (String, String, String) -> Unit) {
+    var name by remember { mutableStateOf("My Minecraft instance") }
+    var version by remember { mutableStateOf(defaultVersion) }
+    var loader by remember { mutableStateOf("Vanilla") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Create instance") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Create a local profile. Game files and loader setup are not installed yet.", style = MaterialTheme.typography.bodySmall)
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Instance name") }, singleLine = true)
+                OutlinedTextField(value = version, onValueChange = { version = it }, label = { Text("Minecraft version") }, singleLine = true)
+                Text("Loader", style = MaterialTheme.typography.labelLarge)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    supportedLoaderChoices.forEach { choice ->
+                        FilterChip(selected = loader == choice, onClick = { loader = choice }, label = { Text(choice) })
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { if (name.isNotBlank() && version.isNotBlank()) onCreate(name, version, loader) }, enabled = name.isNotBlank() && version.isNotBlank()) { Text("Create") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
 }
 
 @Composable
@@ -160,78 +189,35 @@ private fun Header() {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             PixelCrest()
-            Column {
-                Text("ZALITH", color = Color(0xFFF1F6EE), fontSize = 25.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
-                Text("JAVA EDITION LAUNCHER", color = Color(0xFF9FB39F), fontSize = 10.sp, letterSpacing = 1.5.sp)
-            }
+            Column { Text("ZALITH", color = Color(0xFFF1F6EE), fontSize = 25.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp); Text("JAVA EDITION LAUNCHER", color = Color(0xFF9FB39F), fontSize = 10.sp, letterSpacing = 1.5.sp) }
         }
-        Surface(shape = CircleShape, color = Color(0xFF24382A)) {
-            Row(Modifier.padding(horizontal = 11.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(7.dp).clip(CircleShape).background(Color(0xFF82E69A)))
-                Spacer(Modifier.width(7.dp))
-                Text("ONLINE", color = Color(0xFFC9F4CE), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-            }
-        }
+        Surface(shape = CircleShape, color = Color(0xFF24382A)) { Row(Modifier.padding(horizontal = 11.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(7.dp).clip(CircleShape).background(Color(0xFF82E69A))); Spacer(Modifier.width(7.dp)); Text("ONLINE", color = Color(0xFFC9F4CE), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold) } }
     }
 }
 
 @Composable
 private fun PixelCrest() {
-    Box(
-        Modifier.size(48.dp).clip(RoundedCornerShape(15.dp))
-            .background(Brush.linearGradient(listOf(Color(0xFF83D968), Color(0xFF286943))))
-            .border(1.dp, Color(0xFFB5F19D).copy(alpha = 0.45f), RoundedCornerShape(15.dp)),
-        contentAlignment = Alignment.Center
-    ) { Text("Z", color = Color(0xFF102117), fontSize = 29.sp, fontWeight = FontWeight.Black) }
+    Box(Modifier.size(48.dp).clip(RoundedCornerShape(15.dp)).background(Brush.linearGradient(listOf(Color(0xFF83D968), Color(0xFF286943)))).border(1.dp, Color(0xFFB5F19D).copy(alpha = .45f), RoundedCornerShape(15.dp)), contentAlignment = Alignment.Center) { Text("Z", color = Color(0xFF102117), fontSize = 29.sp, fontWeight = FontWeight.Black) }
 }
 
 @Composable
 private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true,
-        placeholder = { Text("Search official Java releases…") },
-        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-        shape = RoundedCornerShape(18.dp),
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor = Color(0xFF18251D), unfocusedContainerColor = Color(0xFF18251D),
-            focusedIndicatorColor = Color(0xFF86D879), unfocusedIndicatorColor = Color(0xFF35483A),
-            focusedTextColor = Color(0xFFF1F6EE), unfocusedTextColor = Color(0xFFF1F6EE),
-            focusedLeadingIconColor = Color(0xFF9BE58C), unfocusedLeadingIconColor = Color(0xFF9FB39F),
-            focusedPlaceholderColor = Color(0xFF829385), unfocusedPlaceholderColor = Color(0xFF829385),
-            cursorColor = Color(0xFF9BE58C)
-        )
-    )
+    OutlinedTextField(value = query, onValueChange = onQueryChange, modifier = Modifier.fillMaxWidth(), singleLine = true,
+        placeholder = { Text("Search official Java releases…") }, leadingIcon = { Icon(Icons.Default.Search, null) }, shape = RoundedCornerShape(18.dp),
+        colors = TextFieldDefaults.colors(focusedContainerColor = Color(0xFF18251D), unfocusedContainerColor = Color(0xFF18251D), focusedIndicatorColor = Color(0xFF86D879), unfocusedIndicatorColor = Color(0xFF35483A), focusedTextColor = Color(0xFFF1F6EE), unfocusedTextColor = Color(0xFFF1F6EE), focusedLeadingIconColor = Color(0xFF9BE58C), unfocusedLeadingIconColor = Color(0xFF9FB39F), cursorColor = Color(0xFF9BE58C)))
 }
 
 @Composable
 private fun HeroCard(version: String, onBrowse: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF203829)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-    ) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF203829)), elevation = CardDefaults.cardElevation(6.dp)) {
         Box {
             BlockLandscape(Modifier.align(Alignment.TopEnd))
-            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                AssistChip(onClick = onBrowse, label = { Text("JAVA • $version") }, leadingIcon = {
-                    Icon(Icons.Default.Code, contentDescription = null, modifier = Modifier.size(16.dp))
-                })
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Your next world\nstarts here.", color = Color.White, fontSize = 27.sp, lineHeight = 32.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("Official Mojang release metadata", color = Color(0xFFC2D8C1), style = MaterialTheme.typography.bodyMedium)
-                }
-                Button(
-                    onClick = onBrowse, shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9BE58C), contentColor = Color(0xFF122116))
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Choose game version", fontWeight = FontWeight.Bold)
-                }
-                Text("Version discovery is live. Installing, signing in and launching the game are not connected yet.", color = Color(0xFFAFC6B0), style = MaterialTheme.typography.labelSmall)
+            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
+                AssistChip(onClick = onBrowse, label = { Text("JAVA • $version") }, leadingIcon = { Icon(Icons.Default.Code, null, Modifier.size(16.dp)) })
+                Text("Your next world\nstarts here.", color = Color.White, fontSize = 27.sp, lineHeight = 32.sp, fontWeight = FontWeight.ExtraBold)
+                Text("Official Mojang version metadata", color = Color(0xFFC2D8C1), style = MaterialTheme.typography.bodyMedium)
+                Button(onClick = onBrowse, shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9BE58C), contentColor = Color(0xFF122116))) { Icon(Icons.Default.PlayArrow, null); Spacer(Modifier.width(8.dp)); Text("Choose game version", fontWeight = FontWeight.Bold) }
+                Text("This prototype manages profiles only; it does not install or launch Minecraft.", color = Color(0xFFAFC6B0), style = MaterialTheme.typography.labelSmall)
             }
         }
     }
@@ -240,78 +226,52 @@ private fun HeroCard(version: String, onBrowse: () -> Unit) {
 @Composable
 private fun BlockLandscape(modifier: Modifier = Modifier) {
     Column(modifier.padding(top = 18.dp, end = 18.dp), horizontalAlignment = Alignment.End) {
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            listOf(Color(0xFFFFD978), Color(0xFFFFE6A1), Color(0xFFFFD978)).forEach { color ->
-                Box(Modifier.size(10.dp).background(color.copy(alpha = 0.8f)))
-            }
-        }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { listOf(Color(0xFFFFD978), Color(0xFFFFE6A1), Color(0xFFFFD978)).forEach { Box(Modifier.size(10.dp).background(it.copy(alpha = .8f))) } }
         Spacer(Modifier.height(15.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.Bottom) {
-            Box(Modifier.size(28.dp, 44.dp).background(Color(0xFF477A4D).copy(alpha = 0.55f)))
-            Box(Modifier.size(38.dp, 64.dp).background(Color(0xFF69A55C).copy(alpha = 0.55f)))
-            Box(Modifier.size(24.dp, 34.dp).background(Color(0xFF3D7049).copy(alpha = 0.55f)))
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.Bottom) { Box(Modifier.size(28.dp, 44.dp).background(Color(0xFF477A4D).copy(alpha = .55f))); Box(Modifier.size(38.dp, 64.dp).background(Color(0xFF69A55C).copy(alpha = .55f))); Box(Modifier.size(24.dp, 34.dp).background(Color(0xFF3D7049).copy(alpha = .55f))) }
+    }
+}
+
+@Composable
+private fun EmptyInstancesCard(onCreate: () -> Unit) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF18251D))) {
+        Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(Icons.Default.Storage, null, tint = Color(0xFF9BE58C), modifier = Modifier.size(32.dp))
+            Text("No instances yet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("Create a profile for Vanilla, Fabric, Forge, NeoForge or OptiFine.", color = Color(0xFFB6C7B7), style = MaterialTheme.typography.bodySmall)
+            Button(onClick = onCreate) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("Create instance") }
+        }
+    }
+}
+
+@Composable
+private fun InstanceCard(instance: GameInstance, accent: Color, onDelete: () -> Unit) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF1A281F))) {
+        Row(Modifier.fillMaxWidth().padding(15.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) {
+            Box(Modifier.size(46.dp).clip(RoundedCornerShape(14.dp)).background(accent.copy(alpha = .18f)), contentAlignment = Alignment.Center) { Icon(Icons.Default.Storage, null, tint = accent) }
+            Column(Modifier.weight(1f)) {
+                Text(instance.name, color = Color(0xFFF1F6EE), fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("Minecraft ${instance.version}  •  ${instance.loader}", color = accent, style = MaterialTheme.typography.bodySmall)
+                Text("Profile only — not installed", color = Color(0xFF9FB39F), style = MaterialTheme.typography.labelSmall)
+            }
+            IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, "Delete instance", tint = Color(0xFFB6C7B7)) }
         }
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun OfficialVersionsCard(
-    loading: Boolean,
-    error: String?,
-    manifest: MojangVersionManifest?,
-    versions: List<String>,
-    selectedVersion: String?,
-    onSelectVersion: (String) -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF18251D))
-    ) {
-        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+private fun OfficialVersionsCard(loading: Boolean, error: String?, manifest: MojangVersionManifest?, versions: List<String>, selectedVersion: String?, onSelect: (String) -> Unit) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF18251D))) {
+        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Column {
-                    Text("Official Java versions", color = Color(0xFFF1F6EE), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("Fetched from Mojang version manifest", color = Color(0xFFB2C4B4), style = MaterialTheme.typography.bodySmall)
-                }
-                if (loading) CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp, color = Color(0xFF9BE58C))
-                else Icon(Icons.Default.CheckCircle, contentDescription = "Manifest loaded", tint = Color(0xFF9BE58C))
+                Column { Text("Official Java versions", color = Color(0xFFF1F6EE), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold); Text("Mojang public version manifest", color = Color(0xFFB2C4B4), style = MaterialTheme.typography.bodySmall) }
+                if (loading) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Color(0xFF9BE58C)) else if (manifest != null) Icon(Icons.Default.CheckCircle, "Manifest loaded", tint = Color(0xFF9BE58C))
             }
             if (manifest != null) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    StatusPill("Latest release", manifest.latestRelease)
-                    StatusPill("Snapshot", manifest.latestSnapshot)
-                }
-                Text("Select a release", color = Color(0xFFDCE8DC), style = MaterialTheme.typography.labelLarge)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    versions.forEachIndexed { index, version ->
-                        FilterChip(
-                            selected = selectedVersion == version,
-                            onClick = { onSelectVersion(version) },
-                            label = { Text(version) },
-                            leadingIcon = if (selectedVersion == version) {
-                                { Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                            } else null
-                        )
-                    }
-                }
-                Text("Showing the newest matching releases. Search above to filter the Mojang release list.", color = Color(0xFF9FB39F), style = MaterialTheme.typography.labelSmall)
-            } else if (error != null) {
-                Text("Could not load official versions: $error", color = Color(0xFFFFB4AB), style = MaterialTheme.typography.bodySmall)
-                Text("Check your connection and reopen the app to retry.", color = Color(0xFFB2C4B4), style = MaterialTheme.typography.labelSmall)
-            } else {
-                Text("Connecting to Mojang…", color = Color(0xFFB2C4B4), style = MaterialTheme.typography.bodySmall)
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatusPill(label: String, value: String) {
-    Surface(color = Color(0xFF293F2E), shape = RoundedCornerShape(12.dp)) {
-        Column(Modifier.padding(horizontal = 11.dp, vertical = 8.dp)) {
-            Text(label, color = Color(0xFFB2C4B4), style = MaterialTheme.typography.labelSmall)
-            Text(value, color = Color(0xFFC9F4CE), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Text("Latest release ${manifest.latestRelease}  •  Snapshot ${manifest.latestSnapshot}", color = Color(0xFFC9F4CE), style = MaterialTheme.typography.labelMedium)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) { versions.forEach { version -> FilterChip(selected = selectedVersion == version, onClick = { onSelect(version) }, label = { Text(version) }) } }
+            } else if (error != null) Text("Could not load versions: $error", color = Color(0xFFFFB4AB), style = MaterialTheme.typography.bodySmall) else Text("Connecting to Mojang…", color = Color(0xFFB2C4B4), style = MaterialTheme.typography.bodySmall)
         }
     }
 }
@@ -319,17 +279,9 @@ private fun StatusPill(label: String, value: String) {
 @Composable
 private fun JavaRuntimeCard() {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF18251D))) {
-        Row(
-            Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(shape = RoundedCornerShape(15.dp), color = Color(0xFF293F2E), modifier = Modifier.size(46.dp)) {
-                Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Memory, contentDescription = null, tint = Color(0xFF9BE58C)) }
-            }
-            Column(Modifier.weight(1f)) {
-                Text("Java runtime", color = Color(0xFFF1F6EE), fontWeight = FontWeight.Bold)
-                Text("Runtime detection and setup not implemented", color = Color(0xFFB6C7B7), style = MaterialTheme.typography.bodySmall)
-            }
-            Icon(Icons.Default.ExpandMore, contentDescription = null, tint = Color(0xFFB6C7B7))
+        Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(shape = RoundedCornerShape(15.dp), color = Color(0xFF293F2E), modifier = Modifier.size(46.dp)) { Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Memory, null, tint = Color(0xFF9BE58C)) } }
+            Column(Modifier.weight(1f)) { Text("Java runtime", color = Color(0xFFF1F6EE), fontWeight = FontWeight.Bold); Text("Runtime setup not implemented", color = Color(0xFFB6C7B7), style = MaterialTheme.typography.bodySmall) }
         }
     }
 }
@@ -338,19 +290,12 @@ private fun JavaRuntimeCard() {
 private fun DeepWikiCard() {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF1C2922))) {
         Row(Modifier.padding(18.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.Top) {
-            Box(Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFF2C4937)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.Code, contentDescription = null, tint = Color(0xFF9BE58C))
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text("DeepWiki field notes", color = Color(0xFFF1F6EE), fontWeight = FontWeight.Bold)
-                Text("Keep setup guides, mod notes and world details close to each instance. Documentation cards are ready to connect.", color = Color(0xFFB6C7B7), style = MaterialTheme.typography.bodySmall, lineHeight = 18.sp)
-            }
+            Box(Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFF2C4937)), contentAlignment = Alignment.Center) { Icon(Icons.Default.Code, null, tint = Color(0xFF9BE58C)) }
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) { Text("DeepWiki field notes", color = Color(0xFFF1F6EE), fontWeight = FontWeight.Bold); Text("Keep setup guides, mod notes and world details close to each instance. Documentation cards are ready to connect.", color = Color(0xFFB6C7B7), style = MaterialTheme.typography.bodySmall, lineHeight = 18.sp) }
         }
     }
 }
 
 @Preview(showBackground = true, widthDp = 420, heightDp = 900)
 @Composable
-private fun ZalithLauncherPreview() {
-    ZalithLauncherTheme { ZalithLauncherScreen() }
-}
+private fun ZalithLauncherPreview() { ZalithLauncherTheme { ZalithLauncherScreen() } }

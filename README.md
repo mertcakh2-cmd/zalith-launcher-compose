@@ -1,22 +1,19 @@
 # Zalith Launcher
 
-A Java Edition-inspired Android launcher UI concept built with Kotlin, Jetpack Compose and Material 3. The visual direction uses block-world colors, instance cards, Java runtime status, and a DeepWiki-style notes panel.
+A Java Edition-inspired Android launcher prototype built with Kotlin, Jetpack Compose and Material 3.
 
-## What is included
-- Android Gradle application module using Kotlin and Jetpack Compose Material 3.
-- Responsive dark launcher dashboard with a Minecraft Java Edition-inspired visual style.
-- Search and selection for sample instance profiles (Vanilla, Forge, and Fabric examples).
-- Runtime status and launch controls presented as UI affordances.
-- DeepWiki-inspired documentation panel.
+## Included
+- Local instance profiles saved on the device (name, Minecraft version, loader choice).
+- Create and delete profile cards.
+- Loader choices: Vanilla, Fabric, Forge, NeoForge and OptiFine.
+- Live release metadata from Mojang's public version manifest.
+- Custom vector launcher icon and editable SVG source in `assets/`.
+- DeepWiki-inspired notes card and Material 3 dark green styling.
 
 ## Build
-Open this repository in Android Studio with Android SDK 35 installed, then run the `app` configuration. From a configured command line, build a debug APK with:
+Open in Android Studio with Android SDK 35. Build the debug APK with `./gradlew assembleDebug` if a Gradle wrapper is present, or use Android Studio's Gradle integration. APK output is normally at `app/build/outputs/apk/debug/`.
 
-```bash
-./gradlew assembleDebug
-```
+## Scope and compatibility
+Instances are local profile records only. The loader names are selectable metadata, not installed integrations. The app does not download Minecraft/assets, install Java, authenticate Microsoft accounts, install Fabric/Forge/NeoForge/OptiFine, or launch the game. A production launcher needs these components implemented with the loader vendors' supported installers and Minecraft's licensing/account requirements.
 
-The APK output will be under `app/build/outputs/apk/debug/` after a successful build. This repository does not currently include the Gradle wrapper scripts, so use Android Studio's Gradle integration or generate a wrapper with a locally installed Gradle distribution.
-
-## Important scope note
-This is currently a **launcher UI prototype**, not a functioning Minecraft Java launcher. It does not download Minecraft files, authenticate Microsoft accounts, install/manage Java runtimes, or start the game process. The sample versions/loaders are display data only. Those integrations need to be implemented and tested separately, with appropriate licensing and account-security handling.
+The listed loader support is not interchangeable: OptiFine support depends on the selected Minecraft version and its installer availability, and mod-loader compatibility must be validated per version.
